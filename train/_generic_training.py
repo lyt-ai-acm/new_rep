@@ -192,6 +192,14 @@ class BiLSTMAttnClassifier(nn.Module):
 
 
 def supervised_contrastive_loss(features, labels, temperature=0.07):
+    """Compute supervised contrastive loss on batch representations.
+
+    Steps:
+    1) L2-normalize features.
+    2) Build pairwise similarity logits with temperature scaling.
+    3) Keep positives (same label, excluding self-pairs).
+    4) Average log-probability over positives for each sample.
+    """
     device = features.device
     batch_size = features.shape[0]
 
@@ -323,7 +331,12 @@ def train_classical(
     torch.save(model.state_dict(), os.path.join(best_dir, "model.pt"))
     vocab.save(os.path.join(best_dir, "vocab.json"))
     with open(os.path.join(best_dir, "model_meta.json"), "w", encoding="utf-8") as f:
-        json.dump({"backbone": backbone, "max_len": max_len, "embed_dim": embed_dim, "hidden_dim": hidden_dim}, f, ensure_ascii=False, indent=2)
+        json.dump(
+            {"backbone": backbone, "max_len": max_len, "embed_dim": embed_dim, "hidden_dim": hidden_dim, "num_labels": 2},
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
 
     return ClassicalTrainResult(
         dev=dev_metrics,

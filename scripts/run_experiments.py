@@ -20,6 +20,7 @@ BACKBONES: List[Dict[str, str]] = [
     {"key": "erlangshen_deberta_v2", "name": "Erlangshen-DeBERTa-v2", "model_name": "IDEA-CCNL/Erlangshen-DeBERTa-v2-320M-Chinese"},
     {"key": "skep", "name": "SKEP", "model_name": "baidu/bce-ernie-1.0-skep-zh"},
 ]
+E4_METRIC_KEY = "E4_Entropy_Dynamic_Gating"
 
 
 def run(cmd: List[str], dry_run: bool = False):
@@ -36,14 +37,14 @@ def read_json(path: str):
         return json.load(f)
 
 
-def maybe_get_f1(metrics: Dict) -> float:
+def extract_f1_score(metrics: Dict) -> float:
     if "test" in metrics and isinstance(metrics["test"], dict):
         if "eval_f1" in metrics["test"]:
             return float(metrics["test"]["eval_f1"])
         if "f1" in metrics["test"]:
             return float(metrics["test"]["f1"])
-    if "E4_Entropy_Dynamic_Gating" in metrics:
-        return float(metrics["E4_Entropy_Dynamic_Gating"].get("f1", 0.0))
+    if E4_METRIC_KEY in metrics:
+        return float(metrics[E4_METRIC_KEY].get("f1", 0.0))
     return 0.0
 
 
@@ -186,8 +187,10 @@ def main():
         else:
             base_metrics = read_json(os.path.join(base_dir, "metrics.json"))
             ours_metrics = read_json(os.path.join(ours_dir, "metrics.json"))
-            bare_f1 = maybe_get_f1(base_metrics)
-            ours_f1 = maybe_get_f1(read_json(fusion_path)) if args.nbest_csv and os.path.exists(fusion_path) else maybe_get_f1(ours_metrics)
+            bare_f1 = extract_f1_score(base_metrics)
+            has_fusion_metrics = bool(args.nbest_csv) and os.path.exists(fusion_path)
+            fusion_metrics = read_json(fusion_path) if has_fusion_metrics else ours_metrics
+            ours_f1 = extract_f1_score(fusion_metrics)
             delta = ours_f1 - bare_f1
 
         summary["results"].append(
