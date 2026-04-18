@@ -52,3 +52,13 @@ python train/infer_with_nbest.py \
   --input_csv outputs/norm/dev_top10_jieba.csv \
   --out_json outputs/roberta_binary_e0/e123_dev_metrics.json
 ```
+
+## 多模型对比训练脚本（统一输入/输出）
+
+以下脚本统一支持：`--data_path --output_dir --epochs --batch_size`（默认数据列：`review` / `label`），并在输出目录生成 `metrics.json`（包含 F1、Accuracy、Precision、Recall、confusion_matrix）。
+
+- `train/train_textcnn.py`：TextCNN
+- `train/train_bilstm_attention.py`：BiLSTM + Attention
+- `train/train_macbert.py`：`hfl/chinese-macbert-base`
+- `train/train_chinesebert.py`：`shannonai/ChineseBERT-base`
+- `train/train_roberta_baseline.py`：`hfl/chinese-roberta-wwm-ext`（不含对比学习）
