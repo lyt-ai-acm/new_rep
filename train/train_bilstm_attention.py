@@ -28,7 +28,7 @@ class CharDataset(Dataset):
         pad_len = self.max_len - len(token_ids)
         if pad_len > 0:
             token_ids += [0] * pad_len
-        attention_mask = [1 if x != 0 else 0 for x in token_ids]
+        attention_mask = [1] * (self.max_len - pad_len) + [0] * pad_len
         return {
             "input_ids": torch.tensor(token_ids, dtype=torch.long),
             "attention_mask": torch.tensor(attention_mask, dtype=torch.long),

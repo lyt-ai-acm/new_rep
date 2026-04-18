@@ -105,7 +105,7 @@ def save_metrics(
     out = {
         "dev": dev_metrics,
         "test": test_metrics,
-        "label_mapping": {str(i): int(v) for i, v in id2label.items()},
+        "label_mapping": {str(i): v for i, v in id2label.items()},
         "config": config,
     }
     with open(os.path.join(output_dir, "metrics.json"), "w", encoding="utf-8") as f:

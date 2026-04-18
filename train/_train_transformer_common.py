@@ -86,7 +86,7 @@ def run_transformer_finetune(args):
         num_train_epochs=args.epochs,
         weight_decay=args.weight_decay,
         warmup_ratio=args.warmup_ratio,
-        eval_strategy="epoch",
+        evaluation_strategy="epoch",
         save_strategy="epoch",
         logging_strategy="steps",
         logging_steps=100,
