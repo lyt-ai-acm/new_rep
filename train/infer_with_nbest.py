@@ -189,8 +189,8 @@ def main():
         "fallback_orig": bool(args.fallback_orig),
         "entropy_low": args.entropy_low,
         "entropy_high": args.entropy_high,
-        "w1_threshold_compat": args.w1_threshold,
-        "margin_threshold_compat": args.margin_threshold,
+        "w1_threshold_legacy": args.w1_threshold,
+        "margin_threshold_legacy": args.margin_threshold,
     }
 
     with open(args.out_json, "w", encoding="utf-8") as f:

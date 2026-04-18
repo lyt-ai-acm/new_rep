@@ -226,7 +226,7 @@ class WeightedCELossTrainer(Trainer):
             loss_fct = nn.CrossEntropyLoss(weight=self.class_weights.to(logits.device))
         else:
             loss_fct = nn.CrossEntropyLoss()
-        loss_ce = loss_fct(logits.view(-1, model.config.num_labels), labels.view(-1))
+        loss_ce = loss_fct(logits.view(-1, 3), labels.view(-1))
 
         if self.scl_weight > 0:
             cls_embeds = outputs.hidden_states[-1][:, 0, :]
