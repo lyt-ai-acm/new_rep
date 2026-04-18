@@ -32,6 +32,10 @@ def parse_args():
     # 创新点专属超参: 熵的边界阈值
     p.add_argument("--entropy_low", type=float, default=0.20, help="熵低于此值完全相信纠错")
     p.add_argument("--entropy_high", type=float, default=0.70, help="熵高于此值完全回退原句")
+    p.add_argument("--gate_entropy_coef", type=float, default=6.0, help="门控网络中熵特征系数")
+    p.add_argument("--gate_w1_coef", type=float, default=4.0, help="门控网络中w1特征系数")
+    p.add_argument("--gate_margin_coef", type=float, default=4.0, help="门控网络中margin特征系数")
+    p.add_argument("--gate_bias", type=float, default=-3.0, help="门控网络偏置项")
     return p.parse_args()
 
 
@@ -80,6 +84,36 @@ def compute_shannon_entropy(W):
     W_safe = np.clip(W, 1e-12, 1.0)
     H = -np.sum(W_safe * np.log(W_safe), axis=1)
     return H
+
+
+def compute_dynamic_fallback_lambda(Wn, args):
+    """
+    轻量门控网络（单层sigmoid）:
+    输入特征: 归一化熵、低w1风险、低margin风险
+    输出: lambda_fallback ∈ [0, 1]
+    """
+    K = Wn.shape[1]
+    H = compute_shannon_entropy(Wn)
+    H_norm = H / np.log(K + 1e-12)
+
+    w1 = Wn[:, 0]
+    w2 = Wn[:, 1] if K >= 2 else np.zeros_like(w1)
+    margin = w1 - w2
+
+    entropy_span = max(args.entropy_high - args.entropy_low, 1e-6)
+    entropy_feature = np.clip((H_norm - args.entropy_low) / entropy_span, 0.0, 1.0)
+    w1_risk = np.clip(args.w1_threshold - w1, 0.0, 1.0)
+    margin_risk = np.clip(args.margin_threshold - margin, 0.0, 1.0)
+
+    z = (
+        args.gate_bias
+        + args.gate_entropy_coef * entropy_feature
+        + args.gate_w1_coef * w1_risk
+        + args.gate_margin_coef * margin_risk
+    )
+    lambda_fb = 1.0 / (1.0 + np.exp(-z))
+
+    return lambda_fb, H_norm, w1, margin
 
 
 def main():
@@ -154,17 +188,7 @@ def main():
         if p_orig is None:
             raise ValueError("fallback_orig=True but no orig/review column found in input csv.")
 
-        # 计算归一化香农熵 H_norm ∈ [0, 1]
-        H = compute_shannon_entropy(Wn)
-        H_norm = H / np.log(K + 1e-12)
-
-        # 计算连续插值系数 lambda_fallback
-        lambda_fb = np.clip((H_norm - args.entropy_low) / (args.entropy_high - args.entropy_low), 0.0, 1.0)
-
-        # 针对极度不确定的单点(w1 < threshold)依然保持兜底拦截，防止极端情况
-        w1 = Wn[:, 0]
-        hard_fallback_mask = (w1 < args.w1_threshold)
-        lambda_fb[hard_fallback_mask] = 1.0
+        lambda_fb, H_norm, w1, margin = compute_dynamic_fallback_lambda(Wn, args)
 
         # 平滑插值 (Soft Blending): lambda * 原始概率 + (1 - lambda) * 纠错融合概率
         p_e4_dynamic = lambda_fb * p_orig + (1.0 - lambda_fb) * p_e3
@@ -173,6 +197,8 @@ def main():
         m_dynamic = compute_metrics(y_true, y_e4_dynamic)
         m_dynamic["mean_normalized_entropy"] = float(H_norm.mean())
         m_dynamic["mean_lambda_fallback"] = float(lambda_fb.mean())
+        m_dynamic["mean_w1"] = float(w1.mean())
+        m_dynamic["mean_margin"] = float(margin.mean())
 
         # 为了兼顾原有的日志提取逻辑，命名中保留 "_fallback" 字样
         result["E3_topk_weighted_fallback"] = m_dynamic
@@ -184,7 +210,11 @@ def main():
         "alpha": args.alpha,
         "fallback_orig": bool(args.fallback_orig),
         "entropy_low": args.entropy_low,
-        "entropy_high": args.entropy_high
+        "entropy_high": args.entropy_high,
+        "gate_entropy_coef": args.gate_entropy_coef,
+        "gate_w1_coef": args.gate_w1_coef,
+        "gate_margin_coef": args.gate_margin_coef,
+        "gate_bias": args.gate_bias,
     }
 
     with open(args.out_json, "w", encoding="utf-8") as f:
