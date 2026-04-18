@@ -224,6 +224,7 @@ def supervised_contrastive_loss(features, labels, temperature=0.07):
     log_prob = logits - torch.log(exp_logits.sum(1, keepdim=True) + 1e-12)
 
     mask_sum = mask.sum(1)
+    # No positive pairs in a batch position is possible; clamp denominator to keep loss finite.
     mask_sum = torch.where(mask_sum == 0, torch.ones_like(mask_sum), mask_sum)
     mean_log_prob_pos = (mask * log_prob).sum(1) / mask_sum
 

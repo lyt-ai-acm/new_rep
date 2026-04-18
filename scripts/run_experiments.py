@@ -20,7 +20,7 @@ BACKBONES: List[Dict[str, str]] = [
     {"key": "erlangshen_deberta_v2", "name": "Erlangshen-DeBERTa-v2", "model_name": "IDEA-CCNL/Erlangshen-DeBERTa-v2-320M-Chinese"},
     {"key": "skep", "name": "SKEP", "model_name": "baidu/bce-ernie-1.0-skep-zh"},
 ]
-E4_METRIC_KEY = "E4_Entropy_Dynamic_Gating"
+ENTROPY_FUSION_METRIC_KEY = "E4_Entropy_Dynamic_Gating"
 
 
 def run(cmd: List[str], dry_run: bool = False):
@@ -29,7 +29,7 @@ def run(cmd: List[str], dry_run: bool = False):
         return
     ret = subprocess.call(cmd)
     if ret != 0:
-        raise RuntimeError(f"Command failed ({ret}): {' '.join(cmd)}")
+        raise RuntimeError(f"Training command failed with exit code {ret}: {' '.join(cmd)}")
 
 
 def read_json(path: str):
@@ -43,8 +43,8 @@ def extract_f1_score(metrics: Dict) -> float:
             return float(metrics["test"]["eval_f1"])
         if "f1" in metrics["test"]:
             return float(metrics["test"]["f1"])
-    if E4_METRIC_KEY in metrics:
-        return float(metrics[E4_METRIC_KEY].get("f1", 0.0))
+    if ENTROPY_FUSION_METRIC_KEY in metrics:
+        return float(metrics[ENTROPY_FUSION_METRIC_KEY].get("f1", 0.0))
     return 0.0
 
 
