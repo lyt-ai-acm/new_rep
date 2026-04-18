@@ -8,6 +8,8 @@ import torch
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, confusion_matrix
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
+FALLBACK_RATIO_THRESHOLD = 0.5
+
 
 def parse_args():
     p = argparse.ArgumentParser()
@@ -181,8 +183,7 @@ def main():
         m_dynamic = compute_metrics(y_true, y_e4_dynamic)
         m_dynamic["mean_normalized_entropy"] = float(H_norm.mean())
         m_dynamic["mean_lambda_fallback"] = float(lambda_fb.mean())
-        fallback_cutoff = 0.5
-        fallback_mask = lambda_fb > fallback_cutoff
+        fallback_mask = lambda_fb > FALLBACK_RATIO_THRESHOLD
         m_dynamic["fallback_ratio"] = float(fallback_mask.mean())
         m_dynamic["fallback_count"] = int(fallback_mask.sum())
 
