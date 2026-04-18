@@ -136,8 +136,7 @@ def main():
         "_config": {
             "top_k": K,
             "alpha": args.alpha,
-            "mean_normalized_entropy": float(lambda_entropy.mean()),
-            "mean_lambda": float(lambda_entropy.mean())
+            "mean_normalized_entropy": float(lambda_entropy.mean())
         }
     }
 
