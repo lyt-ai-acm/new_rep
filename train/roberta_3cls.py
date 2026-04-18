@@ -187,11 +187,13 @@ def supervised_contrastive_loss(
         return embeddings.new_tensor(0.0)
 
     z = F.normalize(embeddings, p=2, dim=1)
-    sim = torch.matmul(z, z.T) / max(temperature, 1e-6)  # [B, B]
+    temp_value = float(temperature)
+    temp = temp_value if temp_value > 1e-6 else 1e-6
+    sim = torch.matmul(z, z.T) / temp  # [B, B]
 
     bsz = sim.size(0)
     logits_mask = torch.ones_like(sim) - torch.eye(bsz, device=sim.device)
-    sim = sim - sim.max(dim=1, keepdim=True).values.detach()  # 数值稳定
+    sim = sim - sim.max(dim=1, keepdim=True).values.detach()
     exp_sim = torch.exp(sim) * logits_mask
     log_prob = sim - torch.log(exp_sim.sum(dim=1, keepdim=True) + 1e-12)
 

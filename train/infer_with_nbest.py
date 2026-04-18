@@ -30,8 +30,8 @@ def parse_args():
     p.add_argument("--margin_threshold", type=float, default=0.08)
 
     # 创新点专属超参: 熵的边界阈值
-    p.add_argument("--entropy_low", type=float, default=0.20, help="熵低于此值完全相信纠错")
-    p.add_argument("--entropy_high", type=float, default=0.70, help="熵高于此值完全回退原句")
+    p.add_argument("--entropy_low", type=float, default=0.20, help="归一化熵H_norm阈值: 低于该值更信任纠错")
+    p.add_argument("--entropy_high", type=float, default=0.70, help="归一化熵H_norm阈值: 高于该值更偏向回退原句")
     p.add_argument("--gate_entropy_coef", type=float, default=6.0, help="门控网络中熵特征系数")
     p.add_argument("--gate_w1_coef", type=float, default=4.0, help="门控网络中w1特征系数")
     p.add_argument("--gate_margin_coef", type=float, default=4.0, help="门控网络中margin特征系数")
@@ -94,7 +94,11 @@ def compute_dynamic_fallback_lambda(Wn, args):
     """
     K = Wn.shape[1]
     H = compute_shannon_entropy(Wn)
-    H_norm = H / np.log(K + 1e-12)
+    if K <= 1:
+        H_norm = np.zeros_like(H)
+    else:
+        # H_norm = H / log(K), where log(K) is the theoretical max entropy under K-way uniform distribution.
+        H_norm = H / np.log(K)
 
     w1 = Wn[:, 0]
     w2 = Wn[:, 1] if K >= 2 else np.zeros_like(w1)
@@ -118,6 +122,8 @@ def compute_dynamic_fallback_lambda(Wn, args):
 
 def main():
     args = parse_args()
+    if args.entropy_high < args.entropy_low:
+        raise ValueError("entropy_high must be >= entropy_low (both are on normalized entropy scale).")
     os.makedirs(os.path.dirname(args.out_json), exist_ok=True)
 
     df = pd.read_csv(args.input_csv, encoding="utf-8-sig")
