@@ -176,8 +176,10 @@ def map_labels_manual(raw_labels: List[Any], neg_set: set, neu_set: set, pos_set
 def supervised_contrastive_loss(features: torch.Tensor, labels: torch.Tensor, temperature: float = 0.07) -> torch.Tensor:
     """
     简化版SupCon Loss：
-    - 同标签样本作为正样本对
-    - 不同标签样本作为负样本
+    - features: [batch_size, hidden_dim]，通常取最后一层 [CLS]
+    - labels: [batch_size]
+    - temperature: 温度系数
+    - 返回: 标量loss；当batch内无可用正样本对时返回0
     """
     if features.size(0) <= 1:
         return features.new_zeros(())

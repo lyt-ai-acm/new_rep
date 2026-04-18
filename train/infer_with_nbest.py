@@ -1,6 +1,7 @@
 import os
 import json
 import argparse
+import warnings
 import numpy as np
 import pandas as pd
 import torch
@@ -84,9 +85,14 @@ def compute_shannon_entropy(W):
 
 def main():
     args = parse_args()
-    out_dir = os.path.dirname(args.out_json)
-    if out_dir:
-        os.makedirs(out_dir, exist_ok=True)
+    out_dir = os.path.dirname(os.path.abspath(args.out_json))
+    os.makedirs(out_dir, exist_ok=True)
+    if args.w1_threshold != 0.35 or args.margin_threshold != 0.08:
+        warnings.warn(
+            "w1_threshold/margin_threshold are legacy compatibility args and are ignored by entropy dynamic gating.",
+            category=DeprecationWarning,
+            stacklevel=2,
+        )
 
     df = pd.read_csv(args.input_csv, encoding="utf-8-sig")
     if args.label_col not in df.columns:
