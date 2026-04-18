@@ -1,0 +1,25 @@
+seed: 42
+
+data:
+  text_col: review
+  label_col: label
+
+normalize:
+  m: 2
+  beam_size: 50
+  topn: 10
+  topk_char: 15
+  alpha: 1.0
+  beta: 0.1
+  lamb: 1.0
+  delta: 0.3
+  tau: 2.0
+
+train:
+  model_name: hfl/chinese-roberta-wwm-ext
+  max_len: 128
+  epochs: 3
+  batch_size: 16
+  lr: 2e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.06
