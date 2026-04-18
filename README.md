@@ -37,18 +37,25 @@ python pipeline/run_jieba.py \
   --char_homo resources/chinese_homophone_char.txt
 ```
 
-### 5. 训练二分类模型（E0）
+### 5. 训练二分类模型（E0, 支持 SupCon）
 ```bash
-python train/train_roberta_binary.py \
+python train/train_contrastive.py \
   --data_path data/Weibo_senti_100k.csv \
   --output_dir outputs/roberta_binary_e0 \
-  --model_name hfl/chinese-roberta-wwm-ext
+  --model_name hfl/chinese-roberta-wwm-ext \
+  --scl_weight 0.1 \
+  --scl_temperature 0.07
 ```
 
-### 6. 评测E1/E2/E3
+### 6. 熵驱动多路融合推理（E1/E2/E3/E4）
 ```bash
-python train/infer_with_nbest.py \
+python train/infer_nbest_entropy.py \
   --model_dir outputs/roberta_binary_e0/best_model \
   --input_csv outputs/norm/dev_top10_jieba.csv \
   --out_json outputs/roberta_binary_e0/e123_dev_metrics.json
+```
+
+### 7. 批量多模型实验（Demo）
+```bash
+bash scripts/run_experiments.sh
 ```
