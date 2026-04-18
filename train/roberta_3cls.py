@@ -222,6 +222,8 @@ class WeightedCELossTrainer(Trainer):
 
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
         labels = inputs.get("labels")
+        if labels is None:
+            raise ValueError("Missing 'labels' in inputs for loss computation.")
         outputs = model(**inputs, output_hidden_states=True)
         logits = outputs.logits
         if self.class_weights is not None:

@@ -181,8 +181,10 @@ def main():
         m_dynamic = compute_metrics(y_true, y_e4_dynamic)
         m_dynamic["mean_normalized_entropy"] = float(H_norm.mean())
         m_dynamic["mean_lambda_fallback"] = float(lambda_fb.mean())
-        m_dynamic["fallback_ratio"] = float((lambda_fb > 0.5).mean())
-        m_dynamic["fallback_count"] = int((lambda_fb > 0.5).sum())
+        fallback_cutoff = 0.5
+        fallback_mask = lambda_fb > fallback_cutoff
+        m_dynamic["fallback_ratio"] = float(fallback_mask.mean())
+        m_dynamic["fallback_count"] = int(fallback_mask.sum())
 
         # 为了兼顾原有的日志提取逻辑，命名中保留 "_fallback" 字样
         result["E3_topk_weighted_fallback"] = m_dynamic
