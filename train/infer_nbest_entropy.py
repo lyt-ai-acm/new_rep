@@ -15,7 +15,7 @@ def parse_args():
     p.add_argument("--out_json", type=str, required=True)
 
     p.add_argument("--label_col", type=str, default="label")
-    p.add_argument("--orig_col", type=str, default="orig")
+    p.add_argument("--orig_col", type=str, default="orig", help="原句列名；若不存在会自动回退到 review 列")
     p.add_argument("--cand_prefix", type=str, default="cand_")
     p.add_argument("--w_prefix", type=str, default="w_")
     p.add_argument("--max_len", type=int, default=128)
@@ -67,7 +67,9 @@ def normalize_weights(W, alpha=1.0):
 def compute_normalized_entropy(W):
     W_safe = np.clip(W, 1e-12, 1.0)
     H = -np.sum(W_safe * np.log(W_safe), axis=1)
-    return H / np.log(W.shape[1] + 1e-12)
+    if W.shape[1] <= 1:
+        return np.zeros_like(H)
+    return H / np.log(W.shape[1])
 
 
 def main():
