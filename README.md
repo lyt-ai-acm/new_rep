@@ -52,3 +52,18 @@ python train/infer_with_nbest.py \
   --input_csv outputs/norm/dev_top10_jieba.csv \
   --out_json outputs/roberta_binary_e0/e123_dev_metrics.json
 ```
+
+## 批量骨干对比实验（裸版 vs 软融合/对比学习增强）
+
+```bash
+bash scripts/run_experiments.sh \
+  --data_path data/Weibo_senti_100k.csv \
+  --nbest_csv outputs/norm/dev_top10_jieba.csv \
+  --output_dir outputs/experiments \
+  --epochs 3 --batch_size 16 --seed 42
+```
+
+- 裸版训练：`train/train_baseline.py`（仅交叉熵）
+- 增强版训练：`train/train_contrastive.py`（交叉熵 + SupCon）
+- 增强版融合评测：`train/infer_nbest_entropy.py`
+- 汇总输出：`outputs/experiments/metrics.json`
