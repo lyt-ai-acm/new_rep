@@ -40,6 +40,7 @@ import pandas as pd
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 from sklearn.model_selection import train_test_split
@@ -94,6 +95,8 @@ def parse_args():
 
     # 损失函数
     p.add_argument("--use_class_weight", action="store_true", help="是否使用类别权重")
+    p.add_argument("--scl_weight", type=float, default=0.0, help="监督对比损失权重，0表示关闭")
+    p.add_argument("--scl_temperature", type=float, default=0.07, help="监督对比损失温度系数")
     return p.parse_args()
 
 
@@ -170,20 +173,68 @@ def map_labels_manual(raw_labels: List[Any], neg_set: set, neu_set: set, pos_set
 # -----------------------------
 # 自定义Trainer：支持class weight
 # -----------------------------
+def supervised_contrastive_loss(features: torch.Tensor, labels: torch.Tensor, temperature: float = 0.07) -> torch.Tensor:
+    """
+    简化版SupCon Loss：
+    - 同标签样本作为正样本对
+    - 不同标签样本作为负样本
+    """
+    if features.size(0) <= 1:
+        return features.new_zeros(())
+
+    features = F.normalize(features, p=2, dim=1)
+    logits = torch.matmul(features, features.T) / temperature
+    logits = logits - logits.max(dim=1, keepdim=True).values.detach()
+
+    labels = labels.view(-1, 1)
+    pos_mask = torch.eq(labels, labels.T).float().to(features.device)
+    logits_mask = torch.ones_like(pos_mask) - torch.eye(pos_mask.size(0), device=features.device)
+    pos_mask = pos_mask * logits_mask
+
+    exp_logits = torch.exp(logits) * logits_mask
+    log_prob = logits - torch.log(exp_logits.sum(dim=1, keepdim=True) + 1e-12)
+
+    pos_cnt = pos_mask.sum(dim=1)
+    valid = pos_cnt > 0
+    if not torch.any(valid):
+        return features.new_zeros(())
+
+    mean_log_prob_pos = (pos_mask * log_prob).sum(dim=1) / torch.clamp(pos_cnt, min=1.0)
+    loss = -mean_log_prob_pos[valid].mean()
+    return loss
+
+
 class WeightedCELossTrainer(Trainer):
-    def __init__(self, class_weights: Optional[torch.Tensor] = None, *args, **kwargs):
+    def __init__(
+        self,
+        class_weights: Optional[torch.Tensor] = None,
+        scl_weight: float = 0.0,
+        scl_temperature: float = 0.07,
+        *args,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         self.class_weights = class_weights
+        self.scl_weight = scl_weight
+        self.scl_temperature = scl_temperature
 
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
-        labels = inputs.pop("labels")
-        outputs = model(**inputs)
+        labels = inputs.get("labels")
+        outputs = model(**inputs, output_hidden_states=True)
         logits = outputs.logits
         if self.class_weights is not None:
             loss_fct = nn.CrossEntropyLoss(weight=self.class_weights.to(logits.device))
         else:
             loss_fct = nn.CrossEntropyLoss()
-        loss = loss_fct(logits.view(-1, 3), labels.view(-1))
+        loss_ce = loss_fct(logits.view(-1, model.config.num_labels), labels.view(-1))
+
+        if self.scl_weight > 0:
+            cls_embeds = outputs.hidden_states[-1][:, 0, :]
+            loss_scl = supervised_contrastive_loss(cls_embeds, labels, temperature=self.scl_temperature)
+            loss = loss_ce + self.scl_weight * loss_scl
+        else:
+            loss = loss_ce
+
         return (loss, outputs) if return_outputs else loss
 
 
@@ -348,6 +399,8 @@ def main():
         data_collator=collator,
         compute_metrics=build_compute_metrics(id2label),
         class_weights=class_weights,
+        scl_weight=args.scl_weight,
+        scl_temperature=args.scl_temperature,
     )
 
     trainer.train()

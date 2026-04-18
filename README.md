@@ -52,3 +52,14 @@ python train/infer_with_nbest.py \
   --input_csv outputs/norm/dev_top10_jieba.csv \
   --out_json outputs/roberta_binary_e0/e123_dev_metrics.json
 ```
+
+### 7. 熵驱动动态回退（E4）
+```bash
+python train/infer_with_nbest.py \
+  --model_dir outputs/roberta_binary_e0/best_model \
+  --input_csv outputs/norm/dev_top10_jieba.csv \
+  --out_json outputs/roberta_binary_e0/e4_entropy_metrics.json \
+  --fallback_orig \
+  --entropy_low 0.20 \
+  --entropy_high 0.70
+```
