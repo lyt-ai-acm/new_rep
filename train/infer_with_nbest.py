@@ -129,7 +129,7 @@ def main():
 
     # ==== 预测cand_1..cand_K ====
     P = []
-    for c in tqdm(cand_cols, desc="Candidates", dynamic_ncols=True):
+    for c in tqdm(cand_cols, desc="Candidates", dynamic_ncols=True, leave=False):
         texts = df[c].fillna("").astype(str).tolist()
         p = predict_prob(texts, tokenizer, model, device, args.batch_size, args.max_len, desc=f"Predict {c}")
         P.append(p)

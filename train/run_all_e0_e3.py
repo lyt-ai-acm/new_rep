@@ -9,6 +9,7 @@
 6) 评测E1/E2/E3
 """
 import os
+import shlex
 import subprocess
 
 
@@ -16,8 +17,12 @@ def run(cmd: str):
     print("\n[RUN]", cmd)
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
-    if cmd.strip().startswith("python "):
-        cmd = cmd.replace("python ", "python -u ", 1)
+    parts = shlex.split(cmd)
+    if parts:
+        exe = os.path.basename(parts[0])
+        if exe.startswith("python") and "-u" not in parts[1:]:
+            parts.insert(1, "-u")
+            cmd = " ".join(shlex.quote(p) for p in parts)
     ret = subprocess.call(cmd, shell=True, env=env)
     if ret != 0:
         raise RuntimeError(f"Command failed: {cmd}")
