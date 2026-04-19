@@ -20,10 +20,9 @@ def run(cmd: str):
     parts = shlex.split(cmd)
     if parts:
         exe = os.path.basename(parts[0])
-        if exe.startswith("python") and "-u" not in parts[1:]:
+        if exe.startswith("python") and "-u" not in parts:
             parts.insert(1, "-u")
-            cmd = " ".join(shlex.quote(p) for p in parts)
-    ret = subprocess.call(cmd, shell=True, env=env)
+    ret = subprocess.call(parts, env=env)
     if ret != 0:
         raise RuntimeError(f"Command failed: {cmd}")
 
