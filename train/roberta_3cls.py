@@ -328,12 +328,14 @@ def main():
         eval_strategy="epoch",
         save_strategy="epoch",
         logging_strategy="steps",
-        logging_steps=100,
+        logging_steps=10,
+        logging_first_step=True,
 
         load_best_model_at_end=True,
         metric_for_best_model="macro_f1",
         greater_is_better=True,
 
+        disable_tqdm=False,
         fp16=args.fp16,
         report_to="none",
         seed=args.seed,

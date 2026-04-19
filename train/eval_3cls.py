@@ -11,6 +11,7 @@ import pandas as pd
 import torch
 
 from sklearn.metrics import accuracy_score, f1_score, precision_recall_fscore_support, confusion_matrix
+from tqdm.auto import tqdm
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 
@@ -35,8 +36,15 @@ def main():
     y_true = df[args.label_col].astype(int).to_numpy()
 
     logits_all = []
+    num_batches = (len(texts) + args.batch_size - 1) // args.batch_size
     with torch.no_grad():
-        for i in range(0, len(texts), args.batch_size):
+        for i in tqdm(
+            range(0, len(texts), args.batch_size),
+            total=num_batches,
+            desc="Evaluating",
+            dynamic_ncols=True,
+            leave=False,
+        ):
             bt = texts[i:i + args.batch_size]
             enc = tok(bt, truncation=True, max_length=args.max_len, padding=True, return_tensors="pt")
             enc = {k: v.to(device) for k, v in enc.items()}

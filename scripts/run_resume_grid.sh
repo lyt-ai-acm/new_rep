@@ -54,7 +54,7 @@ run_train () {
   echo ">>> [TRAIN] out=$out_dir lr=$lr ep=$ep seed=$seed"
 
   # ===== 按你train_roberta.py参数改这里 =====
-  PYTHONPATH=. python "$TRAIN_PY" \
+  PYTHONPATH=. python -u "$TRAIN_PY" \
     --train_csv "$TRAIN_CSV" \
     --dev_csv "$DEV_CSV" \
     --model_name_or_path "$BASE_CKPT" \
@@ -74,7 +74,7 @@ run_eval_one_nbest () {
   local out_json="$4"
 
   echo ">>> [EVAL] model=$model_dir nbest=$tag"
-  PYTHONPATH=. python "$INFER_PY" \
+  PYTHONPATH=. python -u "$INFER_PY" \
     --model_dir "$model_dir" \
     --input_csv "$nbest_csv" \
     --out_json "$out_json" \
@@ -89,7 +89,7 @@ run_eval_one_nbest () {
 # 从json提取关键分数（Base / E3_fb / E4_best）
 extract_scores () {
   local json_file="$1"
-  python - << 'PY' "$json_file"
+  python -u - << 'PY' "$json_file"
 import json,sys
 p=sys.argv[1]
 x=json.load(open(p,'r',encoding='utf-8'))
@@ -145,7 +145,7 @@ done
 # 3) 自动选最佳checkpoint（按E4_best_f1）
 # =========================
 BEST_TXT="$RUN_ROOT/best_by_e4.txt"
-python - << 'PY' "$SUMMARY_TSV" "$BEST_TXT"
+python -u - << 'PY' "$SUMMARY_TSV" "$BEST_TXT"
 import pandas as pd,sys
 tsv,best_txt=sys.argv[1],sys.argv[2]
 df=pd.read_csv(tsv,sep='\t')
