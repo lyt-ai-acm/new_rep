@@ -9,7 +9,6 @@
 6) 评测E1/E2/E3
 """
 import os
-import shlex
 import subprocess
 
 
@@ -17,8 +16,7 @@ def run(cmd: str):
     print("\n[RUN]", cmd)
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
-    parts = shlex.split(cmd)
-    ret = subprocess.call(parts, env=env)
+    ret = subprocess.call(cmd, shell=True, env=env)
     if ret != 0:
         raise RuntimeError(f"Command failed: {cmd}")
 
