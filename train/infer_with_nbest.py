@@ -111,7 +111,7 @@ def _load_generic_training_module():
         if os.path.exists(path):
             spec = importlib.util.spec_from_file_location("_generic_training", path)
             mod = importlib.util.module_from_spec(spec)
-            assert spec and spec.loader
+            assert spec and spec.loader, f"Failed to load module spec from {path}"
             spec.loader.exec_module(mod)
             return mod
     raise ImportError("Could not locate _generic_training.py required for classical model inference.")
@@ -209,7 +209,7 @@ def _build_classical_model(model_cls, vocab, meta, device):
             kwargs[name] = meta[name]
         elif name in defaults and defaults[name] is not None:
             kwargs[name] = defaults[name]
-        elif p.default is inspect._empty and p.kind not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+        elif p.default is inspect.Parameter.empty and p.kind not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
             raise ValueError(f"Missing required init argument '{name}' for {model_cls.__name__}.")
     model = model_cls(**kwargs).to(device)
     return model
@@ -238,7 +238,11 @@ def _load_classical_model(model_dir, device):
         model = state.to(device)
     else:
         sd = state.get("state_dict", state.get("model_state_dict", state)) if isinstance(state, dict) else state
-        model.load_state_dict(sd, strict=False)
+        load_info = model.load_state_dict(sd, strict=False)
+        missing = list(getattr(load_info, "missing_keys", []))
+        unexpected = list(getattr(load_info, "unexpected_keys", []))
+        if missing or unexpected:
+            print(f"[Warn] model.pt key mismatch. missing={missing} unexpected={unexpected}")
     model.eval()
     return model, vocab
 
