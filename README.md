@@ -47,9 +47,9 @@ python train/train_roberta_binary.py \
 
 # 或者直接使用已切分数据
 python train/train_roberta_binary.py \
-  --train_csv datas/xxx/train.csv \
-  --dev_csv datas/xxx/dev.csv \
-  --test_csv datas/xxx/test.csv \
+  --train_csv data/xxx/train.csv \
+  --dev_csv data/xxx/dev.csv \
+  --test_csv data/xxx/test.csv \
   --output_dir outputs/roberta_binary_e0_xxx
 ```
 
@@ -72,7 +72,7 @@ bash scripts/run_experiments.sh \
 
 # 多数据集批量运行（每个数据集会在 outputs/experiments_multi/<dataset_name>/ 下产出结果）
 bash scripts/run_experiments_batch.sh \
-  --datasets data/Weibo_senti_100k.csv datas/chnsenticorp datas/评测数据集 \
+  --datasets data/Weibo_senti_100k.csv data/chnsenticorp data/评测数据集 \
   --nbest_csv outputs/norm/dev_top10_jieba.csv \
   --output_dir outputs/experiments_multi \
   --epochs 3 --batch_size 16 --seed 42

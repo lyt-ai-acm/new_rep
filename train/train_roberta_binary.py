@@ -292,9 +292,12 @@ def main():
             train_dev, test_size=dev_ratio, random_state=args.seed, stratify=train_dev[args.label_col]
         )
 
-    for split_df in (train, dev, test):
-        split_df[args.text_col] = split_df[args.text_col].fillna("").astype(str).str.strip()
-        split_df[args.label_col] = split_df[args.label_col].astype(int)
+    train[args.text_col] = train[args.text_col].fillna("").astype(str).str.strip()
+    dev[args.text_col] = dev[args.text_col].fillna("").astype(str).str.strip()
+    test[args.text_col] = test[args.text_col].fillna("").astype(str).str.strip()
+    train[args.label_col] = train[args.label_col].astype(int)
+    dev[args.label_col] = dev[args.label_col].astype(int)
+    test[args.label_col] = test[args.label_col].astype(int)
 
     train.to_csv(os.path.join(args.output_dir, "train.csv"), index=False, encoding="utf-8-sig")
     dev.to_csv(os.path.join(args.output_dir, "dev.csv"), index=False, encoding="utf-8-sig")
