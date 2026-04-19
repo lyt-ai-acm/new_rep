@@ -18,10 +18,6 @@ def run(cmd: str):
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
     parts = shlex.split(cmd)
-    if parts:
-        exe = os.path.basename(parts[0])
-        if exe.startswith("python") and "-u" not in parts:
-            parts.insert(1, "-u")
     ret = subprocess.call(parts, env=env)
     if ret != 0:
         raise RuntimeError(f"Command failed: {cmd}")
