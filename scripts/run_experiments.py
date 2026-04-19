@@ -49,6 +49,12 @@ def extract_f1_score(metrics: Dict) -> float:
 
 
 def ensure_consistent_splits(args, split_dir: str):
+    if args.train_csv and args.dev_csv and args.test_csv:
+        return args.train_csv, args.dev_csv, args.test_csv
+
+    if not args.data_path:
+        raise ValueError("Either --data_path or all of --train_csv/--dev_csv/--test_csv must be provided")
+
     os.makedirs(split_dir, exist_ok=True)
     train_path = os.path.join(split_dir, "train.csv")
     dev_path = os.path.join(split_dir, "dev.csv")
@@ -78,7 +84,10 @@ def ensure_consistent_splits(args, split_dir: str):
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--data_path", type=str, default="data/Weibo_senti_100k.csv")
+    p.add_argument("--data_path", type=str, default="")
+    p.add_argument("--train_csv", type=str, default="")
+    p.add_argument("--dev_csv", type=str, default="")
+    p.add_argument("--test_csv", type=str, default="")
     p.add_argument("--nbest_csv", type=str, default="")
     p.add_argument("--output_dir", type=str, default="outputs/experiments")
     p.add_argument("--text_col", type=str, default="review")
