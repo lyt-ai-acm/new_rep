@@ -110,8 +110,9 @@ def _load_generic_training_module():
     for path in candidates:
         if os.path.exists(path):
             spec = importlib.util.spec_from_file_location("_generic_training", path)
+            if not (spec and spec.loader):
+                raise ImportError(f"Failed to load module spec from {path}")
             mod = importlib.util.module_from_spec(spec)
-            assert spec and spec.loader, f"Failed to load module spec from {path}"
             spec.loader.exec_module(mod)
             return mod
     raise ImportError("Could not locate _generic_training.py required for classical model inference.")
@@ -209,10 +210,17 @@ def _build_classical_model(model_cls, vocab, meta, device):
             kwargs[name] = meta[name]
         elif name in defaults and defaults[name] is not None:
             kwargs[name] = defaults[name]
-        elif p.default is inspect.Parameter.empty and p.kind not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+        elif _is_required_parameter(p):
             raise ValueError(f"Missing required init argument '{name}' for {model_cls.__name__}.")
     model = model_cls(**kwargs).to(device)
     return model
+
+
+def _is_required_parameter(param):
+    return param.default is inspect.Parameter.empty and param.kind not in (
+        inspect.Parameter.VAR_POSITIONAL,
+        inspect.Parameter.VAR_KEYWORD,
+    )
 
 
 def _load_classical_model(model_dir, device):
@@ -303,6 +311,7 @@ def predict_prob_classical(texts, vocab, model, device, batch_size=64, max_len=1
             if logits.shape[-1] == 1:
                 p = torch.sigmoid(logits).squeeze(-1).detach().cpu().numpy()
             else:
+                # keep class-1 probability for backward compatibility with existing HF path
                 p = torch.softmax(logits, dim=-1)[:, 1].detach().cpu().numpy()
             probs.extend(p.tolist())
     return np.array(probs)
