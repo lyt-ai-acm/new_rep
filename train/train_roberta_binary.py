@@ -231,7 +231,10 @@ class ContrastiveCELossTrainer(Trainer):
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--data_path", type=str, required=True)
+    p.add_argument("--data_path", type=str, default="")
+    p.add_argument("--train_csv", type=str, default="")
+    p.add_argument("--dev_csv", type=str, default="")
+    p.add_argument("--test_csv", type=str, default="")
     p.add_argument("--output_dir", type=str, required=True)
     p.add_argument("--model_name", type=str, default="hfl/chinese-roberta-wwm-ext")
     p.add_argument("--text_col", type=str, default="review")
@@ -269,18 +272,32 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
     set_seed(args.seed)
 
-    df = pd.read_csv(args.data_path, encoding="utf-8-sig")
-    df[args.text_col] = df[args.text_col].fillna("").astype(str).str.strip()
-    df = df[df[args.text_col] != ""].copy()
-    df[args.label_col] = df[args.label_col].astype(int)
+    if args.train_csv and args.dev_csv and args.test_csv:
+        train = pd.read_csv(args.train_csv, encoding="utf-8-sig")
+        dev = pd.read_csv(args.dev_csv, encoding="utf-8-sig")
+        test = pd.read_csv(args.test_csv, encoding="utf-8-sig")
+    else:
+        if not args.data_path:
+            raise ValueError("Either --data_path or all of --train_csv/--dev_csv/--test_csv must be provided")
+        df = pd.read_csv(args.data_path, encoding="utf-8-sig")
+        df[args.text_col] = df[args.text_col].fillna("").astype(str).str.strip()
+        df = df[df[args.text_col] != ""].copy()
+        df[args.label_col] = df[args.label_col].astype(int)
 
-    train_dev, test = train_test_split(
-        df, test_size=args.test_size, random_state=args.seed, stratify=df[args.label_col]
-    )
-    dev_ratio = args.dev_size / (1.0 - args.test_size)
-    train, dev = train_test_split(
-        train_dev, test_size=dev_ratio, random_state=args.seed, stratify=train_dev[args.label_col]
-    )
+        train_dev, test = train_test_split(
+            df, test_size=args.test_size, random_state=args.seed, stratify=df[args.label_col]
+        )
+        dev_ratio = args.dev_size / (1.0 - args.test_size)
+        train, dev = train_test_split(
+            train_dev, test_size=dev_ratio, random_state=args.seed, stratify=train_dev[args.label_col]
+        )
+
+    train[args.text_col] = train[args.text_col].fillna("").astype(str).str.strip()
+    dev[args.text_col] = dev[args.text_col].fillna("").astype(str).str.strip()
+    test[args.text_col] = test[args.text_col].fillna("").astype(str).str.strip()
+    train[args.label_col] = train[args.label_col].astype(int)
+    dev[args.label_col] = dev[args.label_col].astype(int)
+    test[args.label_col] = test[args.label_col].astype(int)
 
     train.to_csv(os.path.join(args.output_dir, "train.csv"), index=False, encoding="utf-8-sig")
     dev.to_csv(os.path.join(args.output_dir, "dev.csv"), index=False, encoding="utf-8-sig")
