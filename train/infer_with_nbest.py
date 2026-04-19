@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import torch
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, confusion_matrix
+from tqdm.auto import tqdm
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 
@@ -35,11 +36,18 @@ def parse_args():
     return p.parse_args()
 
 
-def predict_prob(texts, tokenizer, model, device, batch_size=64, max_len=128):
+def predict_prob(texts, tokenizer, model, device, batch_size=64, max_len=128, desc="Predict"):
     probs = []
     model.eval()
+    num_batches = (len(texts) + batch_size - 1) // batch_size
     with torch.no_grad():
-        for i in range(0, len(texts), batch_size):
+        for i in tqdm(
+            range(0, len(texts), batch_size),
+            total=num_batches,
+            desc=desc,
+            dynamic_ncols=True,
+            leave=False,
+        ):
             batch = texts[i:i + batch_size]
             enc = tokenizer(
                 batch,
@@ -117,13 +125,13 @@ def main():
 
     p_orig = None
     if orig_texts is not None:
-        p_orig = predict_prob(orig_texts, tokenizer, model, device, args.batch_size, args.max_len)
+        p_orig = predict_prob(orig_texts, tokenizer, model, device, args.batch_size, args.max_len, desc="Predict orig")
 
     # ==== 预测cand_1..cand_K ====
     P = []
-    for c in cand_cols:
+    for c in tqdm(cand_cols, desc="Candidates", dynamic_ncols=True, leave=False):
         texts = df[c].fillna("").astype(str).tolist()
-        p = predict_prob(texts, tokenizer, model, device, args.batch_size, args.max_len)
+        p = predict_prob(texts, tokenizer, model, device, args.batch_size, args.max_len, desc=f"Predict {c}")
         P.append(p)
     P = np.stack(P, axis=1)  # [N, K]
 

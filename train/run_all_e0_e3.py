@@ -14,7 +14,9 @@ import subprocess
 
 def run(cmd: str):
     print("\n[RUN]", cmd)
-    ret = subprocess.call(cmd, shell=True)
+    env = os.environ.copy()
+    env["PYTHONUNBUFFERED"] = "1"
+    ret = subprocess.call(cmd, shell=True, env=env)
     if ret != 0:
         raise RuntimeError(f"Command failed: {cmd}")
 

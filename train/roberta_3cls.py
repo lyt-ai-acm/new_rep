@@ -79,6 +79,7 @@ def parse_args():
     p.add_argument("--lr", type=float, default=2e-5)
     p.add_argument("--weight_decay", type=float, default=0.01)
     p.add_argument("--warmup_ratio", type=float, default=0.06)
+    p.add_argument("--logging_steps", type=int, default=10)
 
     p.add_argument("--test_size", type=float, default=0.1)
     p.add_argument("--dev_size", type=float, default=0.1)
@@ -328,12 +329,14 @@ def main():
         eval_strategy="epoch",
         save_strategy="epoch",
         logging_strategy="steps",
-        logging_steps=100,
+        logging_steps=args.logging_steps,
+        logging_first_step=True,
 
         load_best_model_at_end=True,
         metric_for_best_model="macro_f1",
         greater_is_better=True,
 
+        disable_tqdm=False,
         fp16=args.fp16,
         report_to="none",
         seed=args.seed,
