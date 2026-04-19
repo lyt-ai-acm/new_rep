@@ -1,6 +1,9 @@
 import os
 import json
 import argparse
+import importlib
+import importlib.util
+import inspect
 import numpy as np
 import pandas as pd
 import torch
@@ -82,6 +85,238 @@ def compute_shannon_entropy(W):
     return H
 
 
+def detect_model_backend(model_dir):
+    if os.path.exists(os.path.join(model_dir, "model_meta.json")):
+        return "classical"
+    if os.path.exists(os.path.join(model_dir, "config.json")):
+        return "hf"
+    raise ValueError(
+        f"Unrecognized model in {model_dir}. Expected either model_meta.json (classical) or config.json (HuggingFace)."
+    )
+
+
+def _load_generic_training_module():
+    try:
+        return importlib.import_module("_generic_training")
+    except ImportError:
+        pass
+
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    candidates = [
+        os.path.join(repo_root, "_generic_training.py"),
+        os.path.join(repo_root, "train", "_generic_training.py"),
+        os.path.join(repo_root, "scripts", "_generic_training.py"),
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            spec = importlib.util.spec_from_file_location("_generic_training", path)
+            if not (spec and spec.loader):
+                raise ImportError(f"Failed to load module spec from {path}")
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod
+    raise ImportError("Could not locate _generic_training.py required for classical model inference.")
+
+
+def _vocab_size(vocab):
+    if hasattr(vocab, "__len__"):
+        try:
+            return len(vocab)
+        except Exception:
+            pass
+    for attr in ("stoi", "token2idx", "char2idx", "vocab"):
+        obj = getattr(vocab, attr, None)
+        if isinstance(obj, dict):
+            return len(obj)
+    return None
+
+
+def _pad_id(vocab):
+    for attr in ("pad_id", "pad_idx"):
+        if hasattr(vocab, attr):
+            return int(getattr(vocab, attr))
+    for attr in ("stoi", "token2idx", "char2idx", "vocab"):
+        d = getattr(vocab, attr, None)
+        if isinstance(d, dict):
+            for key in ("[PAD]", "<pad>", "<PAD>", "PAD"):
+                if key in d:
+                    return int(d[key])
+    return 0
+
+
+def _unk_id(vocab):
+    for attr in ("unk_id", "unk_idx"):
+        if hasattr(vocab, attr):
+            return int(getattr(vocab, attr))
+    for attr in ("stoi", "token2idx", "char2idx", "vocab"):
+        d = getattr(vocab, attr, None)
+        if isinstance(d, dict):
+            for key in ("[UNK]", "<unk>", "<UNK>", "UNK"):
+                if key in d:
+                    return int(d[key])
+    return 1
+
+
+def _extract_logits(outputs):
+    if hasattr(outputs, "logits"):
+        return outputs.logits
+    if torch.is_tensor(outputs):
+        return outputs
+    if isinstance(outputs, (tuple, list)) and len(outputs) > 0:
+        return outputs[0]
+    raise TypeError("Unsupported model output type for logits extraction.")
+
+
+def _load_char_vocab(char_vocab_cls, vocab_path):
+    if hasattr(char_vocab_cls, "from_json"):
+        return char_vocab_cls.from_json(vocab_path)
+
+    with open(vocab_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    for candidate in (data, data.get("stoi"), data.get("token2idx"), data.get("char2idx"), data.get("vocab")):
+        if candidate is None:
+            continue
+        try:
+            return char_vocab_cls(candidate)
+        except Exception:
+            continue
+    raise ValueError(f"Failed to initialize CharVocab from {vocab_path}.")
+
+
+def _build_classical_model(model_cls, vocab, meta, device):
+    sig = inspect.signature(model_cls.__init__)
+    kwargs = {}
+    vsize = _vocab_size(vocab)
+    num_classes = int(meta.get("num_classes", meta.get("num_labels", 2)))
+    defaults = {
+        "vocab": vocab,
+        "char_vocab": vocab,
+        "vocab_size": vsize,
+        "num_classes": num_classes,
+        "num_labels": num_classes,
+        "pad_idx": _pad_id(vocab),
+        "pad_id": _pad_id(vocab),
+        "embed_dim": int(meta.get("embed_dim", meta.get("embedding_dim", 128))),
+        "embedding_dim": int(meta.get("embedding_dim", meta.get("embed_dim", 128))),
+        "hidden_dim": int(meta.get("hidden_dim", meta.get("lstm_hidden_dim", 128))),
+        "dropout": float(meta.get("dropout", 0.2)),
+        "kernel_sizes": meta.get("kernel_sizes", [3, 4, 5]),
+        "num_filters": int(meta.get("num_filters", 100)),
+    }
+
+    for name, p in list(sig.parameters.items())[1:]:
+        if name in meta:
+            kwargs[name] = meta[name]
+        elif name in defaults and defaults[name] is not None:
+            kwargs[name] = defaults[name]
+        elif _is_required_parameter(p):
+            raise ValueError(f"Missing required init argument '{name}' for {model_cls.__name__}.")
+    model = model_cls(**kwargs).to(device)
+    return model
+
+
+def _is_required_parameter(param):
+    return param.default is inspect.Parameter.empty and param.kind not in (
+        inspect.Parameter.VAR_POSITIONAL,
+        inspect.Parameter.VAR_KEYWORD,
+    )
+
+
+def _load_classical_model(model_dir, device):
+    module = _load_generic_training_module()
+    if not all(hasattr(module, n) for n in ("CharVocab", "TextCNNClassifier", "BiLSTMAttnClassifier")):
+        raise AttributeError("_generic_training.py must define CharVocab, TextCNNClassifier, BiLSTMAttnClassifier.")
+
+    with open(os.path.join(model_dir, "model_meta.json"), "r", encoding="utf-8") as f:
+        meta = json.load(f)
+    model_type = str(meta.get("model_type", "")).lower()
+    vocab = _load_char_vocab(module.CharVocab, os.path.join(model_dir, "vocab.json"))
+
+    if "textcnn" in model_type:
+        model_cls = module.TextCNNClassifier
+    elif "bilstm" in model_type:
+        model_cls = module.BiLSTMAttnClassifier
+    else:
+        raise ValueError(f"Unsupported classical model_type '{model_type}' in model_meta.json")
+
+    model = _build_classical_model(model_cls, vocab, meta, device)
+    state = torch.load(os.path.join(model_dir, "model.pt"), map_location=device)
+    if isinstance(state, torch.nn.Module):
+        model = state.to(device)
+    else:
+        sd = state.get("state_dict", state.get("model_state_dict", state)) if isinstance(state, dict) else state
+        load_info = model.load_state_dict(sd, strict=False)
+        missing = list(getattr(load_info, "missing_keys", []))
+        unexpected = list(getattr(load_info, "unexpected_keys", []))
+        if missing or unexpected:
+            print(f"[Warn] model.pt key mismatch. missing={missing} unexpected={unexpected}")
+    model.eval()
+    return model, vocab
+
+
+def _encode_text_with_vocab(text, vocab, max_len):
+    for method in ("encode", "encode_text", "text_to_ids", "numericalize", "transform"):
+        fn = getattr(vocab, method, None)
+        if fn is None:
+            continue
+        for kwargs in ({"max_len": max_len}, {"max_length": max_len}, {}):
+            try:
+                ids = fn(text, **kwargs) if kwargs else fn(text)
+                if isinstance(ids, tuple):
+                    ids = ids[0]
+                if ids is not None:
+                    ids = list(ids)
+                    break
+            except TypeError:
+                continue
+        else:
+            ids = None
+        if ids is not None:
+            break
+    else:
+        mapping = None
+        for attr in ("stoi", "token2idx", "char2idx", "vocab"):
+            d = getattr(vocab, attr, None)
+            if isinstance(d, dict):
+                mapping = d
+                break
+        if mapping is None:
+            raise ValueError("Cannot encode text: CharVocab has no supported encode method or token map.")
+        unk = _unk_id(vocab)
+        ids = [int(mapping.get(ch, unk)) for ch in str(text)]
+
+    ids = ids[:max_len]
+    pad = _pad_id(vocab)
+    if len(ids) < max_len:
+        ids = ids + [pad] * (max_len - len(ids))
+    return ids
+
+
+def predict_prob_classical(texts, vocab, model, device, batch_size=64, max_len=128):
+    probs = []
+    model.eval()
+    pad = _pad_id(vocab)
+    with torch.no_grad():
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i + batch_size]
+            ids = [_encode_text_with_vocab(t, vocab, max_len) for t in batch]
+            x = torch.tensor(ids, dtype=torch.long, device=device)
+            lengths = (x != pad).sum(dim=1)
+            try:
+                outputs = model(x, lengths)
+            except TypeError:
+                outputs = model(x)
+            logits = _extract_logits(outputs)
+            if logits.shape[-1] == 1:
+                p = torch.sigmoid(logits).squeeze(-1).detach().cpu().numpy()
+            else:
+                # keep class-1 probability for backward compatibility with existing HF path
+                p = torch.softmax(logits, dim=-1)[:, 1].detach().cpu().numpy()
+            probs.extend(p.tolist())
+    return np.array(probs)
+
+
 def main():
     args = parse_args()
     os.makedirs(os.path.dirname(args.out_json), exist_ok=True)
@@ -104,8 +339,14 @@ def main():
     y_true = df[args.label_col].astype(int).to_numpy()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    tokenizer = AutoTokenizer.from_pretrained(args.model_dir, local_files_only=True)
-    model = AutoModelForSequenceClassification.from_pretrained(args.model_dir, local_files_only=True).to(device)
+    backend = detect_model_backend(args.model_dir)
+    if backend == "hf":
+        tokenizer = AutoTokenizer.from_pretrained(args.model_dir, local_files_only=True)
+        model = AutoModelForSequenceClassification.from_pretrained(args.model_dir, local_files_only=True).to(device)
+        predictor = lambda texts: predict_prob(texts, tokenizer, model, device, args.batch_size, args.max_len)
+    else:
+        model, vocab = _load_classical_model(args.model_dir, device)
+        predictor = lambda texts: predict_prob_classical(texts, vocab, model, device, args.batch_size, args.max_len)
 
     # ==== 预测原句（用于Base/回退）====
     if args.orig_col in df.columns:
@@ -117,13 +358,13 @@ def main():
 
     p_orig = None
     if orig_texts is not None:
-        p_orig = predict_prob(orig_texts, tokenizer, model, device, args.batch_size, args.max_len)
+        p_orig = predictor(orig_texts)
 
     # ==== 预测cand_1..cand_K ====
     P = []
     for c in cand_cols:
         texts = df[c].fillna("").astype(str).tolist()
-        p = predict_prob(texts, tokenizer, model, device, args.batch_size, args.max_len)
+        p = predictor(texts)
         P.append(p)
     P = np.stack(P, axis=1)  # [N, K]
 
