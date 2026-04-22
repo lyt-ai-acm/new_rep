@@ -226,7 +226,10 @@ class ContrastiveCELossTrainer(Trainer):
         loss_scl = supervised_contrastive_loss(cls_embeds, labels, temperature=self.scl_temperature)
 
         total_loss = loss_ce + self.scl_weight * loss_scl
-        return (total_loss, outputs) if return_outputs else total_loss
+        if return_outputs:
+            outputs.hidden_states = None
+            return total_loss, outputs
+        return total_loss
 
 
 def parse_args():
