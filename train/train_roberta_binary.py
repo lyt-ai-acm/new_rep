@@ -212,21 +212,23 @@ class ContrastiveCELossTrainer(Trainer):
 
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
         labels = inputs.get("labels")
-        # 强制输出 hidden_states 以提取 [CLS]
-        outputs = model(**inputs, output_hidden_states=True)
+        is_training = model.training
+        outputs = model(**inputs, output_hidden_states=is_training)
         logits = outputs.logits
 
-        loss_fct = nn.CrossEntropyLoss()
-        loss_ce = loss_fct(logits.view(-1, self.model.config.num_labels), labels.view(-1))
+        loss_ce = nn.CrossEntropyLoss()(logits.view(-1, self.model.config.num_labels), labels.view(-1))
 
-        # 提取最后一层 [CLS] 向量
-        last_hidden_state = outputs.hidden_states[-1]
-        cls_embeds = last_hidden_state[:, 0, :]
+        if is_training:
+            cls_embeds = outputs.hidden_states[-1][:, 0, :]
+            loss_scl = supervised_contrastive_loss(cls_embeds, labels, temperature=self.scl_temperature)
+            total_loss = loss_ce + self.scl_weight * loss_scl
+        else:
+            total_loss = loss_ce
 
-        loss_scl = supervised_contrastive_loss(cls_embeds, labels, temperature=self.scl_temperature)
-
-        total_loss = loss_ce + self.scl_weight * loss_scl
-        return (total_loss, outputs) if return_outputs else total_loss
+        if return_outputs:
+            outputs.hidden_states = None
+            return (total_loss, outputs)
+        return total_loss
 
 
 def parse_args():
